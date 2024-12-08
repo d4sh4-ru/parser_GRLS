@@ -16,7 +16,7 @@ for i in range(1,63):
     driver.get(url+str(i))
 
     # Ждем, пока таблица с лекарствами загрузится
-    wait = WebDriverWait(driver, 20)
+    wait = WebDriverWait(driver, 30)
     table = wait.until(EC.presence_of_element_located((By.ID, 'ctl00_plate_gr')))
     # Извлекаем все строки таблицы
     rows = table.find_elements(By.CLASS_NAME, 'poi')
