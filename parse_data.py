@@ -47,18 +47,19 @@ def parse_owner_country(soup: BeautifulSoup) -> str:
     return owner_country
 
 
-def parse_drug_forms(soup: BeautifulSoup) -> tuple[str, str, str]:
+def parse_drug_forms(soup: BeautifulSoup) -> tuple[str, str, str, str]:
     drug_forms_table = soup.find('div', {'id': 'ctl00_plate_drugforms'})
     if drug_forms_table:
         inner_soup = BeautifulSoup(str(drug_forms_table), 'html.parser')
         dosage = soup.find_all('td', rowspan="2")[1].get_text(strip=True)
         expiry_date = inner_soup.find_all('td')[2].get_text(strip=True)
-        storage_conditions_ul = inner_soup.find('ul')
-        storage_conditions = '+'.join([li.get_text(strip=True) for li in storage_conditions_ul.find_all('li')])
+        storage_conditions = inner_soup.find_all('td')[3].get_text(strip=True)
+        tablets_counts_ul = inner_soup.find('ul')
+        tablets_counts = '+'.join([re.findall(r'\(([^)]+)\)', li.get_text(strip=True))[-1] for li in tablets_counts_ul.find_all('li')])
     else:
         raise ValueError("Элемент drugforms не найден на странице.")
 
-    return dosage, expiry_date, storage_conditions
+    return dosage, expiry_date, storage_conditions, tablets_counts
 
 
 def parse_pharmacy_group(soup: BeautifulSoup) -> str:
@@ -136,7 +137,7 @@ def parse_data(soup: BeautifulSoup, url:str) -> dict[str, str]:
     owner_name = parse_owner_name(soup)
     owner_country = parse_owner_country(soup)
     owner_info = f"{owner_name}+{owner_country}".replace('"', '')
-    dosage, expiry_date, storage_conditions = parse_drug_forms(soup)
+    dosage, expiry_date, storage_conditions, tablets_counts = parse_drug_forms(soup)
     pharmacy_group = parse_pharmacy_group(soup)
     prescription_required = 'По рецепту' in storage_conditions
     pdf_filename = save_pdf(soup, url)
@@ -146,6 +147,7 @@ def parse_data(soup: BeautifulSoup, url:str) -> dict[str, str]:
         "Дозировка": dosage,
         "Срок годности": expiry_date,
         "Условия хранения": storage_conditions,
+        "Количество таблеток": tablets_counts,
         "Фармако-терапевтическая группа": pharmacy_group,
         "Рецептурное": prescription_required,
         "БАД": "false",
@@ -163,6 +165,7 @@ def urls_to_csv(urls: list[str], output_csv: str) -> None:
         "Дозировка",
         "Срок годности",
         "Условия хранения",
+        "Количество таблеток",
         "Фармако-терапевтическая группа",
         "Рецептурное",
         "БАД",
