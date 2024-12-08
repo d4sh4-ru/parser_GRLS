@@ -55,7 +55,10 @@ def parse_drug_forms(soup: BeautifulSoup) -> tuple[str, str, str, str]:
         expiry_date = inner_soup.find_all('td')[2].get_text(strip=True)
         storage_conditions = inner_soup.find_all('td')[3].get_text(strip=True)
         tablets_counts_ul = inner_soup.find('ul')
-        tablets_counts = '+'.join([re.findall(r'\(([^)]+)\)', li.get_text(strip=True))[-1] for li in tablets_counts_ul.find_all('li')])
+        try:
+            tablets_counts = '+'.join([re.findall(r'\(([^)]+)\)', li.get_text(strip=True))[-1] for li in tablets_counts_ul.find_all('li')])
+        except IndexError:
+            tablets_counts = 'None'
     else:
         raise ValueError("Элемент drugforms не найден на странице.")
 
