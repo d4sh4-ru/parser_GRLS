@@ -139,14 +139,14 @@ def parse_data(soup: BeautifulSoup, url:str) -> dict[str, str]:
     trade_name = parse_trade_name(soup)
     owner_name = parse_owner_name(soup)
     owner_country = parse_owner_country(soup)
-    owner_info = f"{owner_name}+{owner_country}".replace('"', '')
     dosage, expiry_date, storage_conditions, tablets_counts = parse_drug_forms(soup)
     pharmacy_group = parse_pharmacy_group(soup)
     prescription_required = 'По рецепту' in storage_conditions
     pdf_filename = save_pdf(soup, url)
     data = {
         "Торговое наименование": trade_name,
-        "Наименование держателя": owner_info,
+        "Наименование держателя": owner_name,
+        "Страна держателя": owner_country,
         "Дозировка": dosage,
         "Срок годности": expiry_date,
         "Условия хранения": storage_conditions,
@@ -165,6 +165,7 @@ def urls_to_csv(urls: list[str], output_csv: str) -> None:
     fieldnames = [
         "Торговое наименование",
         "Наименование держателя",
+        "Страна держателя",
         "Дозировка",
         "Срок годности",
         "Условия хранения",
