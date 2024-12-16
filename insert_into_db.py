@@ -70,7 +70,7 @@ for filename in os.listdir(csv_folder):
         # Очистка данных
         df, df1 = preparation_data(df)
 
-        # Генерация строк данных для вставки в таблицу PharmacologicalGroups
+        # Генерация строк данных для вставки в таблицу pharmacological_groups
         pharmacological_groups = df[['Фармако-терапевтическая группа']].drop_duplicates().rename(
             columns={'Фармако-терапевтическая группа': 'name'})
 
@@ -82,53 +82,57 @@ for filename in os.listdir(csv_folder):
             else:
                 pharmacological_groups_F.append(item)
 
-        # Добавляем запросы для PharmacologicalGroups
+        # Добавляем запросы для pharmacological_groups
         for name in pharmacological_groups_F:
             sql_script_pharmacological_groups.append(
-                f"INSERT INTO core.PharmacologicalGroups (name) VALUES ('{name.lower()}') ON CONFLICT (name) DO NOTHING;")
+                f"INSERT INTO core.pharmacological_groups (name) VALUES ('{name.lower()}') ON CONFLICT (name) DO NOTHING;")
 
-        # Генерация строк данных для вставки в таблицу LegalEntities
+        # Генерация строк данных для вставки в таблицу legal_entities
         legal_entities = df[['Наименование держателя', 'Страна держателя']].drop_duplicates().rename(
             columns={'Наименование держателя': 'name', 'Страна держателя': 'country'})
         for index, row in legal_entities.iterrows():
             sql_script_legal_entities.append(
-                f"INSERT INTO core.LegalEntities (name, country) VALUES ('{row['name']}', '{row['country']}') ON CONFLICT (name, country) DO NOTHING;")
+                f"INSERT INTO core.legal_entities (name, country) VALUES ('{row['name']}', '{row['country']}') ON CONFLICT (name, country) DO NOTHING;")
 
-        # Генерация строк данных для вставки в таблицу ReleaseForms
+        # Генерация строк данных для вставки в таблицу release_forms
         for row in df1:
             sql_script_release_forms.append(
-                f"INSERT INTO core.ReleaseForms (dosage_per_tablet, tablets_count) VALUES ('{row[1]}', {row[2]}) ON CONFLICT (dosage_per_tablet, tablets_count) DO NOTHING;")
+                f"INSERT INTO core.release_forms (dosage_per_tablet, tablets_count) VALUES ('{row[1]}', {row[2]}) ON CONFLICT (dosage_per_tablet, tablets_count) DO NOTHING;")
 
-        # Генерация строк данных для вставки в таблицу Medications
+        # Генерация строк данных для вставки в таблицу medications
         for index, row in df.iterrows():
-            legal_entity_id = f"(SELECT id FROM core.LegalEntities WHERE name = '{row['Наименование держателя']}' AND country = '{df.loc[index, 'Страна держателя']}')"
-            pharmacological_group_id = f"(SELECT id FROM core.PharmacologicalGroups WHERE name = '{row['Фармако-терапевтическая группа']}')"
+            legal_entity_id = f"(SELECT id FROM core.legal_entities WHERE name = '{row['Наименование держателя']}' AND country = '{df.loc[index, 'Страна держателя']}')"
+            pharmacological_group_id = f"(SELECT id FROM core.pharmacological_groups WHERE name = '{row['Фармако-терапевтическая группа']}')"
             sql_script_medications.append(
                 f"""
-INSERT INTO core.Medications (trade_name, storage_conditions, is_prescription, is_dietary_supplement)
+INSERT INTO core.medications (trade_name, storage_conditions, is_prescription, is_dietary_supplement)
 VALUES ('{row['Торговое наименование']}', '{row['Условия хранения']}', {row['Рецептурное']}, false)
 ON CONFLICT (trade_name) DO NOTHING;
 """)
 
-        # Генерация строк для связывания Medications и LegalEntities
+        # Генерация строк для связывания medications и legal_entities
         legal_entities_with_medicine = df[
             ['Наименование держателя', 'Страна держателя', 'Торговое наименование']].rename(
             columns={'Наименование держателя': 'name', 'Страна держателя': 'country',
                      'Торговое наименование': 'trade_name'})
         for index, row in legal_entities_with_medicine.iterrows():
             legal_entities_id = f"""
-(SELECT id FROM core.LegalEntities
+(SELECT id FROM core.legal_entities
 WHERE name = '{row['name']}' AND country = '{row['country']}')
-                        """
+"""
+            medication_id = f"""
+(SELECT id FROM core.medications
+WHERE trade_name = '{row['trade_name']}')
+"""
             sql_script_medication_legal_entities.append(
                 f"""
-INSERT INTO core.MedicationLegalEntities (medication_id, legal_entity_id)
-VALUES ('{row['trade_name']}', {legal_entities_id})
+INSERT INTO core.medication_legal_entities (medication_id, legal_entity_id)
+VALUES ({medication_id}, {legal_entities_id})
 ON CONFLICT (medication_id, legal_entity_id) DO NOTHING;
 """
             )
 
-        # Генерация строк для связывания Medications и PharmacologicalGroups
+        # Генерация строк для связывания medications и pharmacological_groups
         pharmacological_groups = df[['Фармако-терапевтическая группа', 'Торговое наименование']].rename(
             columns={'Фармако-терапевтическая группа': 'name', 'Торговое наименование': 'trade_name'})
 
@@ -147,27 +151,35 @@ ON CONFLICT (medication_id, legal_entity_id) DO NOTHING;
         sql_script_medication_pharmacological_groups = []
         for group, trade_name in pharmacological_groups_F_with_medicine:
             pharmacological_groups_id = f"""
-(SELECT id FROM core.PharmacologicalGroups
+(SELECT id FROM core.pharmacological_groups
 WHERE name = '{group.lower()}')
-            """
+"""
+            medication_id = f"""
+(SELECT id FROM core.medications
+WHERE trade_name = '{trade_name}')
+"""
             sql_script_medication_pharmacological_groups.append(
                 f"""
-INSERT INTO core.MedicationPharmacologicalGroups (medication_id, pharmacological_group_id)
-VALUES ('{trade_name}', {pharmacological_groups_id})
+INSERT INTO core.medication_pharmacological_groups (medication_id, pharmacological_group_id)
+VALUES ({medication_id}, {pharmacological_groups_id})
 ON CONFLICT (medication_id, pharmacological_group_id) DO NOTHING;
 """
             )
 
-        # Генерация строк для связывания Medications и ReleaseForms
+        # Генерация строк для связывания medications и release_forms
         for row in df1:
             release_form_id = f"""
-(SELECT id FROM core.ReleaseForms
+(SELECT id FROM core.release_forms
 WHERE dosage_per_tablet = '{row[1]}' AND tablets_count = {row[2]})
-                    """
+"""
+            medication_id = f"""
+(SELECT id FROM core.medications
+WHERE trade_name = '{row[0]}')
+"""
             sql_script_medication_release_forms.append(
                 f"""
-INSERT INTO core.MedicationReleaseForms (medication_id, release_form_id)
-VALUES ('{row[0]}', {release_form_id})
+INSERT INTO core.medication_release_forms (medication_id, release_form_id)
+VALUES ({medication_id}, {release_form_id})
 ON CONFLICT (medication_id, release_form_id) DO NOTHING;
 """
             )
@@ -175,10 +187,14 @@ ON CONFLICT (medication_id, release_form_id) DO NOTHING;
         # Генерация инструкций
         for index, row in df.iterrows():
             instruction_text = extract_text_from_pdf(row['Файл с инструкцией'])
+            medication_id = f"""
+(SELECT id FROM core.medications
+WHERE trade_name = '{row['Торговое наименование']}')
+"""
             sql_script_instructions.append(
                 f"""
-INSERT INTO core.Instructions (medication_trade_name, content)
-VALUES ('{row['Торговое наименование']}', '{instruction_text.replace("'", "")}');
+INSERT INTO core.instructions (medication_id, content)
+VALUES ({medication_id}, '{instruction_text.replace("'", "")}');
 """
             )
 
